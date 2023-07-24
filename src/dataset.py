@@ -19,9 +19,11 @@ class VOCDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         label_path = os.path.join(self.label_dir, self.annotations.iloc[index, 1])
+        print(label_path)
         boxes = []
         with open(label_path) as f:
             for label in f.readlines():
+                print(label)
                 class_label, x, y, width, height = [
                     float(x) if float(x) != int(float(x)) else int(x)
                     for x in label.replace("\n", "").split()

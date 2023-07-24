@@ -4,11 +4,12 @@ from model import Yolo
 from dataset import VOCDataset
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 import matplotlib.patches as patches
 
 IMG_DIR = "data/images"
 LABEL_DIR = "data/labels"
-
+matplotlib.interactive(False)
 
 def main():
     model = Yolo()
@@ -18,8 +19,10 @@ def main():
         label_dir = LABEL_DIR
     )
     for idx, (x, y) in enumerate(train_dataset):
-        output = model(x)
+        
         plot_image(x)
+        #output = model(x)
+        
         break
     return
 
@@ -28,8 +31,8 @@ def plot_image(image):
     height, width, _ = im.shape
     # Create figure and axes
     fig, ax = plt.subplots(1)
-    # Display the image
-    ax.imshow(im)
+    plt.imshow(im, interpolation='nearest')
+    plt.show()
 
 if __name__ == "__main__":
     main()
