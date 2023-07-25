@@ -4,9 +4,10 @@ from model import Yolo
 from dataset import VOCDataset
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
 import matplotlib.patches as patches
 from torch.utils.data import DataLoader
+import torch.optim as optim
+from loss import YoloLoss
 
 IMG_DIR = "data/images"
 LABEL_DIR = "data/labels"
@@ -21,13 +22,8 @@ class Compose(object):
         return img, bboxes
 
 def main():
-    # preprocess the data
+    # preprocess the data, transform
     transform = Compose([transforms.Resize((448, 448)), transforms.ToTensor(),])
-    test_dataset = VOCDataset (
-        "data/100examples.csv",
-        img_dir = IMG_DIR,
-        label_dir = LABEL_DIR
-    )
     train_dataset = VOCDataset (
         "data/100examples.csv",
         transform = transform,
@@ -36,31 +32,62 @@ def main():
     )
     # make the data loader to load the data
     train_loader = DataLoader (
-        dataset=train_dataset,
-        batch_size=16,
-        shuffle=False
+        dataset = train_dataset,
+        batch_size = 16,
+        shuffle = False,
+        drop_last = True
     )
     # make the model
     model = Yolo()
+    # train the model
+    epochs = 300
+    optimizer = optim.Adam(model.parameters(), lr = 0.00002, weight_decay = 0)
+    mean_loss = []
+    test = YoloLoss()
+    for epoch in range(epochs):
+        print(mean_loss)
+        for batch_idx, (x, y) in enumerate(train_loader):
+            out = model(x)
+            loss = test(out, y)
+            mean_loss.append(loss)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            print("Training: epoch: {} batch: {}/7".format(epoch, batch_idx))
     # get the predicted boxes and target boxes
-    pred_boxes, target_boxes = get_bboxes(
-        train_loader, model, iou_threshold=0, threshold=0, device="cpu"
-    )
-    print(len(target_boxes))
-    print(len(train_dataset))
-    print(len(pred_boxes))
-    plot_image(test_dataset[0][0], [target_boxes[0]])
+    pred_boxes, target_boxes = get_bboxes(train_loader, model, iou_threshold = 0, threshold = 0)
+
+    # draw each image for 
+    for idx in range(100):
+        idx_target_boxes = []
+        idx_pred_boxes = []
+        print("Target items:")
+        for box in target_boxes:
+            if box[0] == idx:
+                idx_target_boxes.append(box)
+                print(get_class_name(box[1]))
+        print("Pred items:")
+        for box in pred_boxes:
+            if box[0] == idx:
+                if box[2] > 0.05:
+                    idx_pred_boxes.append(box)
+                    print(get_class_name(box[1]))
+        plot_both_images_with_boxes(train_dataset[idx][0], idx_target_boxes, idx_pred_boxes)
     return
 
-def plot_image(image, boxes):
+def get_class_name(x):
+    name_list = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+    if x >= 19.0:
+        return ""
+    return name_list[int(x)]
+
+def plot_both_images_with_boxes(image, true_boxes, pred_boxes):
     im = np.array(image)
+    im = np.transpose(im, (1, 2, 0))
     height, width, x = im.shape
-    print(height)
-    print(width)
-    print(x)
-    fig, ax = plt.subplots(1)
-    ax.imshow(im, interpolation='nearest')
-    for box in boxes:
+    _, ax = plt.subplots(2)
+    ax[0].imshow(im, interpolation='nearest')
+    for box in true_boxes:
         box = box[3:]
         assert len(box) == 4, "Got more values than in x, y, w, h, in a box!"
         upper_left_x = box[0] - box[2] / 2
@@ -69,11 +96,26 @@ def plot_image(image, boxes):
             (upper_left_x * width, upper_left_y * height),
             box[2] * width,
             box[3] * height,
-            linewidth=1,
-            edgecolor="r",
-            facecolor="none",
+            linewidth = 1,
+            edgecolor = "r",
+            facecolor = "none",
         )
-        ax.add_patch(rect)
+        ax[0].add_patch(rect)
+    ax[1].imshow(im, interpolation='nearest')
+    for box in pred_boxes:
+        box = box[3:]
+        assert len(box) == 4, "Got more values than in x, y, w, h, in a box!"
+        upper_left_x = box[0] - box[2] / 2
+        upper_left_y = box[1] - box[3] / 2
+        rect = patches.Rectangle(
+            (upper_left_x * width, upper_left_y * height),
+            box[2] * width,
+            box[3] * height,
+            linewidth = 2,
+            edgecolor = "r",
+            facecolor = "none",
+        )
+        ax[1].add_patch(rect)
     plt.show()
 
 def non_max_suppression(bboxes, iou_threshold, threshold, box_format="corners"):
@@ -125,14 +167,12 @@ def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
     box2_area = abs((box2_x2 - box2_x1) * (box2_y2 - box2_y1))
     return intersection / (box1_area + box2_area - intersection + 1e-6)
 
-def get_bboxes(loader, model, iou_threshold, threshold, pred_format="cells", box_format="midpoint", device="cuda"):
+def get_bboxes(loader, model, iou_threshold, threshold, pred_format="cells", box_format="midpoint"):
     all_pred_boxes = []
     all_true_boxes = []
     model.eval()
     train_idx = 0
     for (x, labels) in (loader):
-        x = x.to(device)
-        labels = labels.to(device)
         with torch.no_grad():
             predictions = model(x)
         batch_size = x.shape[0]
