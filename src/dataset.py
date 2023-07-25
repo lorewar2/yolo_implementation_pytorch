@@ -13,10 +13,8 @@ class VOCDataset(torch.utils.data.Dataset):
         self.S = 7 # split size
         self.B = 2 # number of boxes
         self.C = 20 # number of classes
-
     def __len__(self):
         return len(self.annotations)
-
     def __getitem__(self, index):
         label_path = os.path.join(self.label_dir, self.annotations.iloc[index, 1])
         print(label_path)
