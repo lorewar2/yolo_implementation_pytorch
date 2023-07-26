@@ -15,6 +15,7 @@ class Yolo(nn.Module):
         self.fcs = self.create_fcs(split_size, num_boxes, num_classes)
 
     def forward(self, x):
+        # go through the darknet cnn network and fully connected layer
         x = self.darknet(x)
         x = torch.flatten(x, start_dim=1)
         x = self.fcs(x)
@@ -22,7 +23,7 @@ class Yolo(nn.Module):
 
     def create_conv_layers(self, architecture, in_channels):
         layers = []
-        # got through the architecture and make the layers
+        # go through the architecture and make the darknet layers
         for x in architecture:
             if type(x) == tuple:
                 layers += [
@@ -60,6 +61,7 @@ class Yolo(nn.Module):
         return nn.Sequential(*layers)
 
     def create_fcs(self, split_size, num_boxes, num_classes):
+        # create the specified fcs layers
         S, B, C = split_size, num_boxes, num_classes
         return nn.Sequential(
             nn.Flatten(),
@@ -94,6 +96,7 @@ architecture_config = [
 ]
 
 class CNNBlock(nn.Module):
+    # single cnn block
     def __init__(self, in_channels, out_channels, **kwargs):
         super(CNNBlock, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, bias=False, **kwargs)
