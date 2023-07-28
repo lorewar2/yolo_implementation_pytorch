@@ -1,18 +1,18 @@
 import torch
 import torchvision.transforms as transforms
-from model import Yolo
+from model import Custom_yolo
 from dataset import VOCDataset
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from torch.utils.data import DataLoader
 import torch.optim as optim
-from loss import YoloLoss
+from loss import Custom_loss_function
 
-IMG_DIR = "data/images"
+IMAGE_DIR = "data/images"
 LABEL_DIR = "data/labels"
 
-class Compose(object):
+class Compose (object):
     def __init__(self, transforms):
         self.transforms = transforms
 
@@ -21,13 +21,13 @@ class Compose(object):
             image, boundingboxes = t(image), boundingboxes
         return image, boundingboxes
 
-def main():
+def main ():
     # preprocess the data, transform
     transform = Compose([transforms.Resize((448, 448)), transforms.ToTensor(),])
     train_dataset = VOCDataset (
         "data/100examples.csv",
         transform = transform,
-        img_dir = IMG_DIR,
+        img_dir = IMAGE_DIR,
         label_dir = LABEL_DIR
     )
     # make the data loader to load the data
@@ -38,17 +38,19 @@ def main():
         drop_last = True
     )
     # make the model
-    model = Yolo()
+    model = Custom_yolo()
     # train the model
-    epochs = 1
+    # parameters
+    epochs = 500
     optimizer = optim.Adam(model.parameters(), lr = 0.00002, weight_decay = 0)
     mean_loss = []
-    test = YoloLoss()
+    cus_loss = Custom_loss_function()
+    # train loop
     for epoch in range(epochs):
         print(mean_loss)
         for batch_idx, (x, y) in enumerate(train_loader):
             out = model(x)
-            loss = test(out, y)
+            loss = cus_loss(out, y)
             mean_loss.append(loss)
             optimizer.zero_grad()
             loss.backward()
@@ -83,7 +85,7 @@ def get_class_name(value):
     else:
         return name_list[int(value)]
 
-def plot_both_images_with_boxes(image, true_boxes, pred_boxes):
+def plot_both_images_with_boxes (image, true_boxes, pred_boxes):
     im = np.array(image)
     im = np.transpose(im, (1, 2, 0))
     height, width, x = im.shape
@@ -122,7 +124,7 @@ def plot_both_images_with_boxes(image, true_boxes, pred_boxes):
         ax[1].add_patch(rect)
     plt.show()
 
-def threshold_check(boundingboxes, threshold_2, threshold_1):
+def threshold_check (boundingboxes, threshold_2, threshold_1):
     # get the bounding boxes which are greater than threshold_1
     boundingboxes = [box for box in boundingboxes if box[1] > threshold_1]
     # sort the bounding boxes
@@ -135,7 +137,7 @@ def threshold_check(boundingboxes, threshold_2, threshold_1):
         boundingboxes_after_nms.append(chosen_box) 
     return boundingboxes_after_nms
 
-def intersection_over_union(boxes_preds, boxes_labels):
+def intersection_over_union (boxes_preds, boxes_labels):
     # get the mid points of the boxes
     b1_x1 = boxes_preds[..., 0:1] - boxes_preds[..., 2:3] / 2
     b1_y1 = boxes_preds[..., 1:2] - boxes_preds[..., 3:4] / 2
@@ -159,7 +161,7 @@ def intersection_over_union(boxes_preds, boxes_labels):
     # return iou
     return b1_b2_intersection / denominator
 
-def bounding_box_calculator(loader, model, iou_threshold, threshold):
+def bounding_box_calculator (loader, model, iou_threshold, threshold):
     all_pred_boxes = []
     all_true_boxes = []
     # put the model in eval mode
@@ -184,25 +186,25 @@ def bounding_box_calculator(loader, model, iou_threshold, threshold):
     model.train()
     return all_pred_boxes, all_true_boxes
 
-def cellboxes_to_boxes(out):
-    batch_size = out.shape[0]
-    predictions = out.reshape(batch_size, 7, 7, 30)
+def cellboxes_to_boxes (input):
+    batch_size = input.shape[0]
+    predictions = input.reshape(batch_size, 7, 7, 30)
     boundingboxes1 = predictions[..., 21:25]
     boundingboxes2 = predictions[..., 26:30]
-    scores = torch.cat((predictions[..., 20].unsqueeze(0), predictions[..., 25].unsqueeze(0)), dim=0)
+    scores = torch.cat((predictions[..., 20].unsqueeze(0), predictions[..., 25].unsqueeze(0)), dim = 0)
     best_box = scores.argmax(0).unsqueeze(-1)
     best_boxes = boundingboxes1 * (1 - best_box) + best_box * boundingboxes2
     cell_indices = torch.arange(7).repeat(batch_size, 7, 1).unsqueeze(-1)
     x = 1 / 7 * (best_boxes[..., :1] + cell_indices)
     y = 1 / 7 * (best_boxes[..., 1:2] + cell_indices.permute(0, 2, 1, 3))
     w_y = 1 / 7 * best_boxes[..., 2:4]
-    converted_boundingboxes = torch.cat((x, y, w_y), dim=-1)
+    converted_boundingboxes = torch.cat((x, y, w_y), dim = -1)
     predicted_class = predictions[..., :20].argmax(-1).unsqueeze(-1)
     best_confidence = torch.max(predictions[..., 20], predictions[..., 25]).unsqueeze(-1)
-    converted_pred = torch.cat((predicted_class, best_confidence, converted_boundingboxes), dim=-1).reshape(out.shape[0], 7 * 7, -1)
+    converted_pred = torch.cat((predicted_class, best_confidence, converted_boundingboxes), dim=-1).reshape(input.shape[0], 7 * 7, -1)
     converted_pred[..., 0] = converted_pred[..., 0].long()
     all_boundingboxes = []
-    for ex_idx in range(out.shape[0]):
+    for ex_idx in range(input.shape[0]):
         boundingboxes = []
         for boundingboxes_idx in range(7 * 7):
             boundingboxes.append([x.item() for x in converted_pred[ex_idx, boundingboxes_idx, :]])

@@ -1,16 +1,16 @@
 import torch
 import torch.nn as nn
 
-class Yolo(nn.Module):
+class Custom_yolo (nn.Module):
     def __init__(self):
         # config for VOC dataset
         in_channels = 3
         split_size = 7
         num_boxes = 2
         num_classes = 20
-        super(Yolo, self).__init__()
+        super(Custom_yolo, self).__init__()
         # create conv layers according to the architecture
-        self.darknet = self.create_conv_layers(architecture_config, in_channels)
+        self.darknet = self.create_conv_layers(cnn_architecture_config, in_channels)
         # create 2 fc layers
         self.fcs = self.create_fcs(split_size, num_boxes, num_classes)
 
@@ -66,12 +66,11 @@ class Yolo(nn.Module):
         return nn.Sequential(
             nn.Flatten(),
             nn.Linear(1024 * S * S, 4096),
-            nn.Dropout(0.5),
             nn.LeakyReLU(0.1),
             nn.Linear(4096, S * S * (C + B * 5)),
         )
 
-architecture_config = [
+cnn_architecture_config = [
     # tuple = (kernel size, number of filters of output, stride, padding)
     (7, 64, 2, 3),
     "M",  # max-pooling 2x2 stride = 2
