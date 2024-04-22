@@ -1,20 +1,56 @@
 import torch
 import torch.nn as nn
+import torchvision.models as models
 
 class Custom_yolo (nn.Module):
     def __init__(self):
+        super(Custom_yolo, self).__init__()
+        # Load the pretrained ResNet50 model
+        resnet50 = models.resnet50(pretrained=True)
+        # Freeze the layers in ResNet50
+        for param in resnet50.parameters():
+            param.requires_grad = False
+        # Remove the last fully connected layer
+        self.backbone = nn.Sequential(*(list(resnet50.children())[:-2]))
+        # Additional layers to restore dimensions
+        self.up_layers = nn.Sequential(
+            # Up-sample to 28x28
+            nn.ConvTranspose2d(2048, 1024, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(1024),
+            nn.ReLU(),
+            # Up-sample to 56x56
+            nn.ConvTranspose2d(1024, 512, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            # Up-sample to 112x112
+            nn.ConvTranspose2d(512, 256, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            # Up-sample to 224x224
+            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            # Up-sample to 448x448
+            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            # Final Conv to adjust the channel size, if needed
+            nn.Conv2d(64, 3, kernel_size=1)  # Assuming the output is an image with 3 channels
+        )
         # config for VOC dataset
         in_channels = 3
         split_size = 7
         num_boxes = 2
         num_classes = 20
-        super(Custom_yolo, self).__init__()
         # create conv layers according to the architecture
         self.darknet = self.create_conv_layers(cnn_architecture_config, in_channels)
         # create 2 fc layers
         self.fcs = self.create_fcs(split_size, num_boxes, num_classes)
 
     def forward(self, x):
+        # go thorough pretrained model
+        x = self.backbone(x)
+        x = self.up_layers(x)
         # go through the darknet cnn network and fully connected layer
         x = self.darknet(x)
         x = torch.flatten(x, start_dim=1)

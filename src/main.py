@@ -41,7 +41,7 @@ def main ():
     model = Custom_yolo()
     # train the model
     # parameters
-    epochs = 500
+    epochs = 10
     optimizer = optim.Adam(model.parameters(), lr = 0.00002, weight_decay = 0)
     mean_loss = []
     cus_loss = Custom_loss_function()
