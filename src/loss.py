@@ -16,8 +16,8 @@ class Custom_loss_function(nn.Module):
     def forward(self, predictions, target):
         # calculate the required data
         predictions = predictions.reshape(-1, self.S, self.S, self.C + self.B * 5)
-        iou_b1 = intersection_over_union_loss(predictions[..., 21:25], target[..., 21:25])
-        iou_b2 = intersection_over_union_loss(predictions[..., 26:30], target[..., 21:25])
+        iou_b1 = intersection_over_union(predictions[..., 21:25], target[..., 21:25])
+        iou_b2 = intersection_over_union(predictions[..., 26:30], target[..., 21:25])
         ious = torch.cat([iou_b1.unsqueeze(0), iou_b2.unsqueeze(0)], dim=0)
         iou_maxes, bestbox = torch.max(ious, dim=0) 
         exists_box = target[..., 20].unsqueeze(3)
@@ -40,26 +40,32 @@ class Custom_loss_function(nn.Module):
         loss = (self.lambda_coordinate * box_loss + object_loss + self.lambda_no_object * no_object_loss + class_loss)
         return loss
 
-def intersection_over_union_loss(boxes_preds, boxes_labels):
-    # get the mid points of the boxes
+def intersection_over_union(boxes_preds, boxes_labels):
+    # calculate the top left corner of the predicted bounding boxes
     b1_x1 = boxes_preds[..., 0:1] - boxes_preds[..., 2:3] / 2
     b1_y1 = boxes_preds[..., 1:2] - boxes_preds[..., 3:4] / 2
+    # calculate the bottom right corner of the predicted bounding boxes
     b1_x2 = boxes_preds[..., 0:1] + boxes_preds[..., 2:3] / 2
     b1_y2 = boxes_preds[..., 1:2] + boxes_preds[..., 3:4] / 2
+    # calculate the top left corner of the ground truth bounding boxes
     b2_x1 = boxes_labels[..., 0:1] - boxes_labels[..., 2:3] / 2
     b2_y1 = boxes_labels[..., 1:2] - boxes_labels[..., 3:4] / 2
+    # calculate the bottom right corner of the ground truth bounding boxes
     b2_x2 = boxes_labels[..., 0:1] + boxes_labels[..., 2:3] / 2
     b2_y2 = boxes_labels[..., 1:2] + boxes_labels[..., 3:4] / 2
+    # calculate the coordinates of the intersection rectangle's top left corner
     x1 = torch.max(b1_x1, b2_x1)
     y1 = torch.max(b1_y1, b2_y1)
+    # calculate the coordinates of the intersection rectangle's bottom right corner
     x2 = torch.min(b1_x2, b2_x2)
     y2 = torch.min(b1_y2, b2_y2)
-    # total area + intersection
+    # calculate the area of the predicted bounding boxes
     b1_area = abs((b1_x2 - b1_x1) * (b1_y2 - b1_y1))
+    # calculate the area of the ground truth bounding boxes
     b2_area = abs((b2_x2 - b2_x1) * (b2_y2 - b2_y1))
-    # find the intersection
+    # calculate the area of the intersection rectangle
     b1_b2_intersection = (x2 - x1).clamp(0) * (y2 - y1).clamp(0)
-    # union + small value to prevent division by 0
+    # calculate the denominator for the IoU formula, adjusting for potential zero division
     denominator = (b1_area + b2_area - b1_b2_intersection + 1e-5)
-    # return iou
+    # calculate and return the IoU value
     return b1_b2_intersection / denominator

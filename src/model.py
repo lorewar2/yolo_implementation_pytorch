@@ -12,7 +12,7 @@ class Custom_yolo (nn.Module):
             param.requires_grad = False
         # Remove the last fully connected layer
         self.backbone = nn.Sequential(*(list(resnet50.children())[:-2]))
-        # Additional layers to restore dimensions
+        # restore the dimensions back to original
         self.up_layers = nn.Sequential(
             # Up-sample to 28x28
             nn.ConvTranspose2d(2048, 1024, kernel_size=3, stride=2, padding=1, output_padding=1),

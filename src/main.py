@@ -11,6 +11,7 @@ from loss import Custom_loss_function
 
 IMAGE_DIR = "data/images"
 LABEL_DIR = "data/labels"
+MODEL_SAVE_PATH = "model/saved_model.pt"
 
 class Compose (object):
     def __init__(self, transforms):
@@ -20,12 +21,17 @@ class Compose (object):
         for t in self.transforms:
             image, boundingboxes = t(image), boundingboxes
         return image, boundingboxes
-
+    
 def main ():
+    trainer()
+    #evaluator()
+    return
+
+def trainer():
     # preprocess the data, transform
     transform = Compose([transforms.Resize((448, 448)), transforms.ToTensor(),])
     train_dataset = VOCDataset (
-        "data/100examples.csv",
+        "data/train.csv",
         transform = transform,
         img_dir = IMAGE_DIR,
         label_dir = LABEL_DIR
@@ -41,7 +47,7 @@ def main ():
     model = Custom_yolo()
     # train the model
     # parameters
-    epochs = 10
+    epochs = 100
     optimizer = optim.Adam(model.parameters(), lr = 0.00002, weight_decay = 0)
     mean_loss = []
     cus_loss = Custom_loss_function()
@@ -56,6 +62,29 @@ def main ():
             loss.backward()
             optimizer.step()
             print("Training: epoch: {} batch: {}/7".format(epoch, batch_idx))
+    torch.save(model, MODEL_SAVE_PATH)
+    return
+
+def evaluator():
+    # preprocess the data, transform
+    transform = Compose([transforms.Resize((448, 448)), transforms.ToTensor(),])
+    train_dataset = VOCDataset (
+        "data/test.csv",
+        transform = transform,
+        img_dir = IMAGE_DIR,
+        label_dir = LABEL_DIR
+    ) 
+    # make the data loader to load the data
+    train_loader = DataLoader (
+        dataset = train_dataset,
+        batch_size = 16,
+        shuffle = False,
+        drop_last = True
+    )
+    # make the model
+    model = Custom_yolo()
+    model = torch.load(MODEL_SAVE_PATH)
+    model.eval()
     # get the predicted boxes and target boxes
     pred_boxes, target_boxes = bounding_box_calculator(train_loader, model, iou_threshold = 0.1, threshold = 0.1)
 
@@ -77,6 +106,7 @@ def main ():
         plot_both_images_with_boxes(train_dataset[idx][0], idx_target_boxes, idx_pred_boxes)
     return
 
+# helper functions
 def get_class_name(value):
     # from the value get the string of the class
     name_list = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
