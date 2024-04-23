@@ -46,9 +46,10 @@ def trainer():
     # make the model
     model = Custom_yolo()
     # train the model
-    # parameters
-    epochs = 100
-    optimizer = optim.Adam(model.parameters(), lr = 0.00002, weight_decay = 0)
+    # train 135 epochs on training set as in paper
+    # first 75 epochs with 0.01 lr
+    epochs = 75
+    optimizer = optim.Adam(model.parameters(), lr = 0.01, weight_decay = 0)
     mean_loss = []
     cus_loss = Custom_loss_function()
     # train loop
@@ -61,7 +62,42 @@ def trainer():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            print("Training: epoch: {} batch: {}/7".format(epoch, batch_idx))
+            print("LR 0.01 Training: epoch: {} batch: {}/7".format(epoch, batch_idx))
+    # 30 epochs with 0.001 lr
+    epochs = 75
+    optimizer = optim.Adam(model.parameters(), lr = 0.001, weight_decay = 0)
+    mean_loss = []
+    cus_loss = Custom_loss_function()
+    # train loop
+    for epoch in range(epochs):
+        print(mean_loss)
+        for batch_idx, (x, y) in enumerate(train_loader):
+            out = model(x)
+            loss = cus_loss(out, y)
+            mean_loss.append(loss)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            print("LR 0.001 Training: epoch: {} batch: {}/7".format(epoch, batch_idx))
+    torch.save(model, MODEL_SAVE_PATH)
+    # 30 epochs with 0.0001 lr
+    # parameters
+    epochs = 75
+    optimizer = optim.Adam(model.parameters(), lr = 0.001, weight_decay = 0)
+    mean_loss = []
+    cus_loss = Custom_loss_function()
+    torch.save(model, MODEL_SAVE_PATH)
+    # train loop
+    for epoch in range(epochs):
+        print(mean_loss)
+        for batch_idx, (x, y) in enumerate(train_loader):
+            out = model(x)
+            loss = cus_loss(out, y)
+            mean_loss.append(loss)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            print("LR 0.0001 Training: epoch: {} batch: {}/7".format(epoch, batch_idx))
     torch.save(model, MODEL_SAVE_PATH)
     return
 
