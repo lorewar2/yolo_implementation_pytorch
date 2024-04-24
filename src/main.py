@@ -21,10 +21,96 @@ class Compose (object):
         for t in self.transforms:
             image, boundingboxes = t(image), boundingboxes
         return image, boundingboxes
+import numpy as np
+
+def compute_iou(box1, box2):
+    """ Compute the Intersection over Union (IoU) of two bounding boxes. """
+    x1, y1, x2, y2 = box1
+    x1_p, y1_p, x2_p, y2_p = box2
+    
+    xi1 = max(x1, x1_p)
+    yi1 = max(y1, y1_p)
+    xi2 = min(x2, x2_p)
+    yi2 = min(y2, y2_p)
+    inter_area = max(xi2 - xi1, 0) * max(yi2 - yi1, 0)
+    
+    box1_area = (x2 - x1) * (y2 - y1)
+    box2_area = (x2_p - x1_p) * (y2_p - y1_p)
+    union_area = box1_area + box2_area - inter_area
+    
+    return inter_area / union_area
+
+def compute_ap(recalls, precisions):
+    """ Compute the average precision, given the recall and precision curves. """
+    mrec = np.concatenate(([0.], recalls, [1.]))
+    mpre = np.concatenate(([0.], precisions, [0.]))
+    for i in range(len(mpre) - 2, -1, -1):
+        mpre[i] = max(mpre[i], mpre[i + 1])
+    ap = sum((mrec[i + 1] - mrec[i]) * mpre[i + 1] for i in range(len(mpre) - 1))
+    return ap
+
+def evaluate_predictions_per_class(predictions, ground_truths, class_id, iou_threshold=0.5):
+    """ Evaluate a set of predictions against the ground truths for a specific class. """
+    class_predictions = [p for p in predictions if p[6] == class_id]
+    class_ground_truths = [gt for gt in ground_truths if gt[5] == class_id]
+
+    gt_boxes = [gt[1:5] for gt in class_ground_truths]
+    pred_boxes = [(pred[1], pred[2:6]) for pred in class_predictions]
+    pred_boxes.sort(key=lambda x: x[0], reverse=True)  # sort by confidence score
+
+    assigned_gt = [False] * len(gt_boxes)
+    tp = []
+    fp = []
+
+    for confidence, pred_box in pred_boxes:
+        matched = False
+        for i, gt_box in enumerate(gt_boxes):
+            if compute_iou(pred_box, gt_box) > iou_threshold:
+                if not assigned_gt[i]:
+                    assigned_gt[i] = True
+                    tp.append(1)
+                    fp.append(0)
+                    matched = True
+                    break
+        if not matched:
+            tp.append(0)
+            fp.append(1)
+
+    tp_cumsum = np.cumsum(tp)
+    fp_cumsum = np.cumsum(fp)
+    recalls = tp_cumsum / (len(gt_boxes) if len(gt_boxes) else 1)
+    precisions = tp_cumsum / np.maximum(tp_cumsum + fp_cumsum, np.finfo(np.float64).eps)
+    
+    return compute_ap(recalls, precisions)
+
+def evaluate_predictions(predictions, ground_truths, num_classes=20):
+    """ Evaluate predictions for all classes and compute mean AP. """
+    aps = []
+    for class_id in range(1, num_classes + 1):
+        ap = evaluate_predictions_per_class(predictions, ground_truths, class_id)
+        aps.append(ap)
+    
+    mean_ap = np.mean(aps)
+    return mean_ap
+
+
     
 def main ():
-    trainer()
+    #trainer()
     #evaluator()
+    # Example usage
+    predictions = [
+        [1, 0.9, 25, 25, 125, 125, 1],
+        [1, 0.8, 23, 23, 120, 120, 2],  # Different class
+    ]
+
+    ground_truths = [
+        [1, 24, 24, 126, 126, 1],
+        [1, 23, 23, 120, 120, 2]  # Different class
+    ]
+
+    mAP = evaluate_predictions(predictions, ground_truths)
+    print(f"Mean Average Precision (mAP) across 20 classes: {mAP}")
     return
 
 def trainer():
