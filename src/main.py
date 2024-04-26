@@ -23,23 +23,6 @@ class Compose (object):
         return image, boundingboxes
 import numpy as np
 
-def compute_iou(box1, box2):
-    """ Compute the Intersection over Union (IoU) of two bounding boxes. """
-    x1, y1, x2, y2 = box1
-    x1_p, y1_p, x2_p, y2_p = box2
-    
-    xi1 = max(x1, x1_p)
-    yi1 = max(y1, y1_p)
-    xi2 = min(x2, x2_p)
-    yi2 = min(y2, y2_p)
-    inter_area = max(xi2 - xi1, 0) * max(yi2 - yi1, 0)
-    
-    box1_area = (x2 - x1) * (y2 - y1)
-    box2_area = (x2_p - x1_p) * (y2_p - y1_p)
-    union_area = box1_area + box2_area - inter_area
-    
-    return inter_area / union_area
-
 def compute_ap(recalls, precisions):
     """ Compute the average precision, given the recall and precision curves. """
     mrec = np.concatenate(([0.], recalls, [1.]))
@@ -49,7 +32,7 @@ def compute_ap(recalls, precisions):
     ap = sum((mrec[i + 1] - mrec[i]) * mpre[i + 1] for i in range(len(mpre) - 1))
     return ap
 
-def evaluate_predictions_per_class(predictions, ground_truths, class_id, iou_threshold=0.5):
+def evaluate_predictions_per_class(predictions, ground_truths, class_id, iou_threshold=0.1):
     """ Evaluate a set of predictions against the ground truths for a specific class. """
     class_predictions = [p for p in predictions if p[6] == class_id]
     class_ground_truths = [gt for gt in ground_truths if gt[5] == class_id]
@@ -65,7 +48,7 @@ def evaluate_predictions_per_class(predictions, ground_truths, class_id, iou_thr
     for confidence, pred_box in pred_boxes:
         matched = False
         for i, gt_box in enumerate(gt_boxes):
-            if compute_iou(pred_box, gt_box) > iou_threshold:
+            if intersection_over_union(pred_box, gt_box) > iou_threshold:
                 if not assigned_gt[i]:
                     assigned_gt[i] = True
                     tp.append(1)
@@ -89,7 +72,7 @@ def evaluate_predictions(predictions, ground_truths, num_classes=20):
     for class_id in range(1, num_classes + 1):
         ap = evaluate_predictions_per_class(predictions, ground_truths, class_id)
         aps.append(ap)
-    
+    print(aps)
     mean_ap = np.mean(aps)
     return mean_ap
 
@@ -97,20 +80,20 @@ def evaluate_predictions(predictions, ground_truths, num_classes=20):
     
 def main ():
     #trainer()
-    #evaluator()
+    prediction, ground = evaluator()
     # Example usage
-    predictions = [
-        [1, 0.9, 25, 25, 125, 125, 1],
-        [1, 0.8, 23, 23, 120, 120, 2],  # Different class
-    ]
+    #predictions = [
+    #    [1, 0.9, 25, 25, 125, 125, 1],
+    #    [1, 0.8, 23, 23, 120, 120, 2],  # Different class
+    #]
 
-    ground_truths = [
-        [1, 24, 24, 126, 126, 1],
-        [1, 23, 23, 120, 120, 2]  # Different class
-    ]
+    #ground_truths = [
+    #    [1, 24, 24, 126, 126, 1],
+    #    [1, 23, 23, 120, 120, 2]  # Different class
+    #]
 
-    mAP = evaluate_predictions(predictions, ground_truths)
-    print(f"Mean Average Precision (mAP) across 20 classes: {mAP}")
+    #mAP = evaluate_predictions(prediction, ground)
+    #print(f"Mean Average Precision (mAP) across 20 classes: {mAP}")
     return
 
 def trainer():
@@ -191,7 +174,7 @@ def evaluator():
     # preprocess the data, transform
     transform = Compose([transforms.Resize((448, 448)), transforms.ToTensor(),])
     train_dataset = VOCDataset (
-        "data/test.csv",
+        "data/100examples.csv",
         transform = transform,
         img_dir = IMAGE_DIR,
         label_dir = LABEL_DIR
@@ -208,8 +191,8 @@ def evaluator():
     model = torch.load(MODEL_SAVE_PATH)
     model.eval()
     # get the predicted boxes and target boxes
-    pred_boxes, target_boxes = bounding_box_calculator(train_loader, model, iou_threshold = 0.1, threshold = 0.1)
-
+    pred_boxes, target_boxes = bounding_box_calculator(train_loader, model, iou_threshold = 0.5, threshold = 0.1)
+    print(pred_boxes)
     # draw each image for 
     for idx in range(100):
         idx_target_boxes = []
@@ -226,7 +209,7 @@ def evaluator():
                     idx_pred_boxes.append(box)
                     print(get_class_name(box[1]))
         plot_both_images_with_boxes(train_dataset[idx][0], idx_target_boxes, idx_pred_boxes)
-    return
+    return pred_boxes, target_boxes
 
 # helper functions
 def get_class_name(value):
